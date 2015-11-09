@@ -4,7 +4,7 @@
 #include "stdafx.h"
 #include "RDMaddonBatt2.h"
 
-#define MYDEBUG
+//#define MYDEBUG
 
 SYSTEM_POWER_STATUS_EX pwrStatus;
 
@@ -45,9 +45,10 @@ DWORD FLOATHEIGHT	=	80; //100 //100                     // Height of floating wn
 // 
 //colors
 unsigned long colorRed=RGB(255,0,0);
-unsigned long colorGreen=RGB(0,0xB6,0);
+unsigned long colorGreen=RGB(0,0xFF,0);
 unsigned long colorYellow=RGB(255,255,0);
-unsigned long colorGreenLight=RGB(0,0xFF,0);
+unsigned long colorGreenLight=RGB(0,0xB6,0);
+
 unsigned long colorBatt=RGB(100,100,100);
 unsigned long colorUnknown=RGB(0xC0,0xC0,0xC0);
 unsigned long colorWinBackground=RGB(0x04,0x4A,0x1C);
@@ -69,7 +70,14 @@ BOOL			InitInstance(HINSTANCE, int);
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 
+int _level=100;
 int getBatteryLevel(){
+#ifdef MYDEBUG
+	_level-=15;
+	if(_level<0)
+		_level=100;
+	return _level;
+#endif
 	GetSystemPowerStatusEx(&pwrStatus, TRUE);
 	int iLevel = pwrStatus.BatteryLifePercent;
 	return iLevel;
@@ -85,19 +93,21 @@ int WINAPI WinMain(HINSTANCE hInstance,
 	// Perform application initialization:
 	if (!InitInstance(hInstance, nCmdShow)) 
 	{
-		return FALSE;
+		//Do not end before quit message has been received
+		//return FALSE;
 	}
+	else{
+		HACCEL hAccelTable;
+		hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_RDMADDONBATT2));
 
-	HACCEL hAccelTable;
-	hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_RDMADDONBATT2));
-
-	// Main message loop:
-	while (GetMessage(&msg, NULL, 0, 0)) 
-	{
-		if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg)) 
+		// Main message loop:
+		while (GetMessage(&msg, NULL, 0, 0)) 
 		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
+			if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg)) 
+			{
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
 		}
 	}
 
@@ -158,9 +168,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
     }
 
 	HWND hWndTS = FindWindow(L"TSSHELLWND", NULL);
+#ifndef MYDEBUG
 	if(hWndTS==NULL){
-		hWndTS=GetForegroundWindow();
+		DEBUGMSG(1, (L"### TSSHELLWND not found. EXIT. ###\n"));
+		return FALSE;
 	}
+#else
+		hWndTS=GetForegroundWindow();
+		DEBUGMSG(1, (L"### using foregroundwindow ###\n"));
+#endif
 
     //hWnd = CreateWindow(szWindowClass, szTitle, WS_VISIBLE,
     //    CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, hInstance, NULL);
@@ -263,19 +279,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			hbrOrange=CreateSolidBrush(colorGreenLight);
 
 			hTimer=SetTimer(hWnd, dwTimerID, 5000, NULL);
-#ifndef MYDEBUG
+
 			iBattLevel = getBatteryLevel();
-#endif
             break;
 		case WM_TIMER:
 			if(wParam==dwTimerID){
 #ifndef MYDEBUG
-				iBattLevel = getBatteryLevel();
-#else
-				iBattLevel-=15;
-				if(iBattLevel<0)
-					iBattLevel=100;
+				if(FindWindow(L"TSSHELLWND", NULL)==NULL)
+					PostQuitMessage(-2);
 #endif
+				iBattLevel = getBatteryLevel();
+
 				DEBUGMSG(1, (L"getBatteryLevel=%i\n", iBattLevel));
 				GetClientRect(hWnd, &rect);
 				InvalidateRect(hWnd, &rect, TRUE);
@@ -291,25 +305,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DEBUGMSG(1,(L"Painting for batt=%i\n",iBattLevel));
 				rect.left=blockMargin; rect.top=blockMargin; 
 				rect.right=blockWidth+blockMargin; rect.bottom=blockHeight+blockMargin;
-			if(iBattLevel>=75)
+			if(iBattLevel>75)
 				iRes=FillRect(hdc, &rect, hbrGreen);
-			else
-				iRes=FillRect(hdc, &rect, hBackground);
-
-			if(iBattLevel>=50){
-				rect.left=1; rect.top=2*blockMargin+1*blockHeight; rect.right=blockWidth; rect.bottom=2*blockMargin+2*blockHeight;
+			
+			//second bar
+			rect.left=1; rect.top=2*blockMargin+1*blockHeight; rect.right=blockWidth; rect.bottom=2*blockMargin+2*blockHeight;
+			if(iBattLevel>50){
 				iRes=FillRect(hdc, &rect, hbrOrange);
 			}
-			if(iBattLevel>=25){
-				rect.left=1; rect.top=3*blockMargin+2*blockHeight; rect.right=blockWidth; rect.bottom=3*blockMargin+3*blockHeight;
+			//third bar
+			rect.left=1; rect.top=3*blockMargin+2*blockHeight; rect.right=blockWidth; rect.bottom=3*blockMargin+3*blockHeight;
+			if(iBattLevel>25){
 				iRes=FillRect(hdc, &rect, hbrYellow);
 			}
+			//forth bar
+			rect.left=1; rect.top=4*blockMargin+3*blockHeight; rect.right=blockWidth; rect.bottom=4*blockMargin+4*blockHeight;
 			if(iBattLevel>=15){
-				rect.left=1; rect.top=4*blockMargin+3*blockHeight; rect.right=blockWidth; rect.bottom=4*blockMargin+4*blockHeight;
 				iRes=FillRect(hdc, &rect, hbrRed);
 			}
 			if(iBattLevel<15){
-				rect.left=1; rect.top=4*blockMargin+3*blockHeight; rect.right=blockWidth; rect.bottom=4*blockMargin+4*blockHeight;
 				iRes=FillRect(hdc, &rect, hbrUnknown);
 			}
 			
